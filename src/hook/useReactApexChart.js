@@ -485,143 +485,70 @@ const useReactApexChart = () => {
     );
   };
 
-  let createChartTwo = (chartColor, height) => {
-    let series = [
-      {
-        name: "This Day",
-        data: [4, 18, 13, 40, 30, 50, 30, 60, 40, 75, 45, 90],
-      },
-    ];
+const createChartTwo = (chartColor, height, revenueData = []) => {
+  const series = [
+    {
+      name: "Revenue",
+      data: revenueData, // dynamic values for each month
+    },
+  ];
 
-    let options = {
-      chart: {
-        type: "area",
-        width: "100%",
-        height: 162,
-        sparkline: {
-          enabled: false, // Remove whitespace
-        },
-        toolbar: {
-          show: false,
-        },
-        padding: {
-          left: 0,
-          right: 0,
-          top: 0,
-          bottom: 0,
-        },
+  const options = {
+    chart: {
+      type: "area",
+      height,
+      toolbar: { show: false },
+    },
+    stroke: {
+      curve: "smooth",
+      width: 4,
+      colors: [chartColor],
+    },
+    fill: {
+      type: "gradient",
+      colors: [chartColor],
+      gradient: {
+        shade: "light",
+        type: "vertical",
+        shadeIntensity: 0.5,
+        gradientToColors: [`${chartColor}00`],
+        opacityFrom: 0.6,
+        opacityTo: 0.3,
+        stops: [0, 100],
       },
-      dataLabels: {
-        enabled: false,
+    },
+    tooltip: {
+      y: {
+        formatter: (value) => `₹${Math.round(value)}`,
       },
-      stroke: {
-        curve: "smooth",
-        width: 4,
-        colors: [chartColor],
-        lineCap: "round",
-      },
-      grid: {
-        show: true,
-        borderColor: "red",
-        strokeDashArray: 0,
-        position: "back",
-        xaxis: {
-          lines: {
-            show: false,
-          },
-        },
-        yaxis: {
-          lines: {
-            show: false,
-          },
-        },
-        row: {
-          colors: undefined,
-          opacity: 0.5,
-        },
-        column: {
-          colors: undefined,
-          opacity: 0.5,
-        },
-        padding: {
-          top: -30,
-          right: 0,
-          bottom: -10,
-          left: 0,
-        },
-      },
-      fill: {
-        type: "gradient",
-        colors: [chartColor], // Set the starting color (top color) here
-        gradient: {
-          shade: "light", // Gradient shading type
-          type: "vertical", // Gradient direction (vertical)
-          shadeIntensity: 0.5, // Intensity of the gradient shading
-          gradientToColors: [`${chartColor}00`], // Bottom gradient color (with transparency)
-          inverseColors: false, // Do not invert colors
-          opacityFrom: 0.6, // Starting opacity
-          opacityTo: 0.3, // Ending opacity
-          stops: [0, 100],
-        },
-      },
-      // Customize the circle marker color on hover
-      markers: {
-        colors: [chartColor],
-        strokeWidth: 3,
-        size: 0,
-        hover: {
-          size: 10,
-        },
-      },
-      xaxis: {
-        categories: [
-          `Jan`,
-          `Feb`,
-          `Mar`,
-          `Apr`,
-          `May`,
-          `Jun`,
-          `Jul`,
-          `Aug`,
-          `Sep`,
-          `Oct`,
-          `Nov`,
-          `Dec`,
-        ],
-        tooltip: {
-          enabled: false,
-        },
-        labels: {
-          formatter: function (value) {
-            return value;
-          },
-          style: {
-            fontSize: "14px",
-          },
-        },
-      },
-      yaxis: {
-        labels: {
-          show: false,
-        },
-      },
-      tooltip: {
-        x: {
-          format: "dd/MM/yy HH:mm",
-        },
-      },
-    };
-
-    return (
-      <ReactApexChart
-        options={options}
-        series={series}
-        type='area'
-        height={height}
-      />
-    );
+    },
+    xaxis: {
+      categories: [
+        "Jan", "Feb", "Mar", "Apr", "May", "Jun",
+        "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"
+      ],
+      labels: { style: { fontSize: "14px" } },
+    },
+    yaxis: { labels: { show: false } },
+    dataLabels: { enabled: false },
+    markers: {
+      size: 0,
+      hover: { size: 6 },
+    },
+    grid: {
+      show: false,
+    },
   };
 
+  return (
+    <ReactApexChart
+      options={options}
+      series={series}
+      type="area"
+      height={height}
+    />
+  );
+};
   let createChartThree = (chartColor) => {
     let currentYear = new Date().getFullYear();
     let series = [
@@ -1848,133 +1775,92 @@ const useReactApexChart = () => {
     );
   };
 
-  let barChartSeriesTwo = [
-    {
-      name: "Sales",
-      data: [
-        {
-          x: "Jan",
-          y: 85000,
-        },
-        {
-          x: "Feb",
-          y: 70000,
-        },
-        {
-          x: "Mar",
-          y: 40000,
-        },
-        {
-          x: "Apr",
-          y: 50000,
-        },
-        {
-          x: "May",
-          y: 60000,
-        },
-        {
-          x: "Jun",
-          y: 50000,
-        },
-        {
-          x: "Jul",
-          y: 40000,
-        },
-        {
-          x: "Aug",
-          y: 50000,
-        },
-        {
-          x: "Sep",
-          y: 40000,
-        },
-        {
-          x: "Oct",
-          y: 60000,
-        },
-        {
-          x: "Nov",
-          y: 30000,
-        },
-        {
-          x: "Dec",
-          y: 50000,
-        },
-      ],
-    },
-  ];
+// ✅ Convert the { x: "Jan", y: 85000 } format into separate arrays
+const rawData = [
+  { x: "Jan", y: 85000 },
+  { x: "Feb", y: 70000 },
+  { x: "Mar", y: 40000 },
+  { x: "Apr", y: 50000 },
+  { x: "May", y: 60000 },
+  { x: "Jun", y: 50000 },
+  { x: "Jul", y: 40000 },
+  { x: "Aug", y: 50000 },
+  { x: "Sep", y: 40000 },
+  { x: "Oct", y: 60000 },
+  { x: "Nov", y: 30000 },
+  { x: "Dec", y: 50000 },
+];
 
-  let barChartOptionsTwo = {
-    chart: {
-      type: "bar",
-      height: 310,
-      toolbar: {
-        show: false,
+// ✅ Split into two arrays for ApexChart
+const categories = rawData.map((item) => item.x); // ['Jan', 'Feb', ...]
+const data = rawData.map((item) => item.y);       // [85000, 70000, ...]
+
+let barChartSeriesTwo = [
+  {
+    name: "Sales",
+    data: data,
+  },
+];
+
+let barChartOptionsTwo = {
+  chart: {
+    type: "bar",
+    height: 310,
+    toolbar: {
+      show: false,
+    },
+  },
+  plotOptions: {
+    bar: {
+      borderRadius: 4,
+      horizontal: false,
+      columnWidth: "23%",
+      endingShape: "rounded",
+    },
+  },
+  dataLabels: {
+    enabled: false,
+  },
+  fill: {
+    type: "gradient",
+    colors: ["#487FFF"],
+    gradient: {
+      shade: "light",
+      type: "vertical",
+      shadeIntensity: 0.5,
+      gradientToColors: ["#487FFF"],
+      inverseColors: false,
+      opacityFrom: 1,
+      opacityTo: 1,
+      stops: [0, 100],
+    },
+  },
+  grid: {
+    show: true,
+    borderColor: "#D1D5DB",
+    strokeDashArray: 4,
+    position: "back",
+  },
+  xaxis: {
+    type: "category",
+    categories: categories, // dynamically inserted
+  },
+  yaxis: {
+    labels: {
+      formatter: function (value) {
+        return (value / 1000).toFixed(0) + "k";
       },
     },
-    plotOptions: {
-      bar: {
-        borderRadius: 4,
-        horizontal: false,
-        columnWidth: "23%",
-        endingShape: "rounded",
+  },
+  tooltip: {
+    y: {
+      formatter: function (value) {
+        return (value / 1000) + "k";
       },
     },
-    dataLabels: {
-      enabled: false,
-    },
-    fill: {
-      type: "gradient",
-      colors: ["#487FFF"], // Set the starting color (top color) here
-      gradient: {
-        shade: "light", // Gradient shading type
-        type: "vertical", // Gradient direction (vertical)
-        shadeIntensity: 0.5, // Intensity of the gradient shading
-        gradientToColors: ["#487FFF"], // Bottom gradient color (with transparency)
-        inverseColors: false, // Do not invert colors
-        opacityFrom: 1, // Starting opacity
-        opacityTo: 1, // Ending opacity
-        stops: [0, 100],
-      },
-    },
-    grid: {
-      show: true,
-      borderColor: "#D1D5DB",
-      strokeDashArray: 4, // Use a number for dashed style
-      position: "back",
-    },
-    xaxis: {
-      type: "category",
-      categories: [
-        "Jan",
-        "Feb",
-        "Mar",
-        "Apr",
-        "May",
-        "Jun",
-        "Jul",
-        "Aug",
-        "Sep",
-        "Oct",
-        "Nov",
-        "Dec",
-      ],
-    },
-    yaxis: {
-      labels: {
-        formatter: function (value) {
-          return (value / 1000).toFixed(0) + "k";
-        },
-      },
-    },
-    tooltip: {
-      y: {
-        formatter: function (value) {
-          return value / 1000 + "k";
-        },
-      },
-    },
-  };
+  },
+};
+
 
   let donutChartSeriesTwo = [500, 500, 500];
   let donutChartOptionsTwo = {
@@ -5483,6 +5369,8 @@ const useReactApexChart = () => {
     paymentStatusChartSeriesTwo,
     paymentStatusChartOptionsTwo,
     createChart,
+    
+    
     createChartTwo,
     createChartThree,
     createChartFour,

@@ -1,0 +1,13 @@
+.square-modal .modal-dialog {
+  width: 500px;
+  height: 500px;
+  max-width: 90vw;
+  max-height: 90vh;
+}
+
+.square-modal .modal-content {
+  height: 100%;
+  overflow-y: auto;
+  padding: 1rem;
+  border-radius: 8px;
+}

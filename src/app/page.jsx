@@ -1,26 +1,15 @@
-import DashBoardLayerOne from "@/components/DashBoardLayerOne";
-import MasterLayout from "@/masterLayout/MasterLayout";
-import { Breadcrumb } from "react-bootstrap";
+'use client';
 
-export const metadata = {
-  title: "WowDash NEXT JS - Admin Dashboard Multipurpose Bootstrap 5 Template",
-  description:
-    "Wowdash NEXT JS is a developer-friendly, ready-to-use admin template designed for building attractive, scalable, and high-performing web applications.",
-};
+import { useAuth } from "@clerk/nextjs";
+import { UserButton } from "@clerk/nextjs";
 
-const Page = () => {
+export default function HomePage() {
+  const { userId } = useAuth();
+
   return (
-    <>
-      {/* MasterLayout */}
-      <MasterLayout>
-        {/* Breadcrumb */}
-        <Breadcrumb title='AI' />
-
-        {/* DashBoardLayerOne */}
-        <DashBoardLayerOne />
-      </MasterLayout>
-    </>
+    <div>
+      <h1>Welcome, User ID: {userId}</h1>
+      <UserButton afterSignOutUrl="/login" />
+    </div>
   );
-};
-
-export default Page;
+}
