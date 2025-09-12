@@ -13,45 +13,33 @@ const Payments = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingPayment, setEditingPayment] = useState(null);
   const [gymId, setGymId] = useState("");
-  const [clerkId, setClerkId] = useState(""); // NEW STATE
   const { getToken } = useAuth();
   const { user, isLoaded } = useUser();
 
+  // Fetch payments
   const fetchPayments = async () => {
-    const localClerkId = user?.id;
-    const localGymId = localStorage.getItem("gymId");
+    if (!user) return;
 
-    setClerkId(localClerkId);
+    const localGymId = localStorage.getItem("gymId");
     setGymId(localGymId);
 
-    console.log("🆔 Clerk ID:", localClerkId);
-    console.log("🏋️ Gym ID:", localGymId);
-
-    if (!localClerkId || !localGymId) {
-      console.warn("⚠️ Missing clerkId or gymId. Skipping fetch.");
-      return;
-    }
+    if (!localGymId) return;
 
     try {
+      // ✅ Get Clerk JWT token for backend
+      const token = await getToken();
+      console.log("🔑 Clerk JWT (fetchPayments):", token);
+
       const res = await axios.get(`${API}?gymId=${localGymId}`, {
         headers: {
-          "x-clerk-user-id": localClerkId,
+          Authorization: `Bearer ${token}`,
         },
       });
 
       console.log("✅ Payments fetched:", res.data);
       setPayments(res.data);
     } catch (err) {
-      console.error("❌ Failed to fetch payments:");
-      console.log("🔍 Axios Error Message:", err.message);
-      console.log(
-        "🔍 Axios Error Response:",
-        err.response?.data || "No response data"
-      );
-      console.log(
-        "🔍 Axios Error Request:",
-        err.request || "No request object"
-      );
+      console.error("❌ Failed to fetch payments:", err?.response?.data || err);
     }
   };
 
@@ -61,45 +49,48 @@ const Payments = () => {
       method: "",
       transactionId: "",
       status: "",
-      createdAt: new Date(),
     });
     setShowModal(true);
   };
 
   const openEditModal = (payment) => {
-    setEditingPayment({ ...payment, createdAt: new Date(payment.createdAt) });
+    setEditingPayment({ ...payment });
     setShowModal(true);
   };
 
   const handleSave = async () => {
-    if (!editingPayment || !clerkId || !gymId) {
-      alert("Missing payment data, Clerk ID, or Gym ID.");
+    if (!editingPayment || !gymId) {
+      alert("Missing payment data or Gym ID.");
       return;
     }
 
-    console.log("🆔 Clerk ID:", clerkId);
-    console.log("🏋️ Gym ID:", gymId);
-
-    const { amount, method, transactionId, status } = editingPayment;
-
-    const paymentData = {
-      gymId,
-      userId: clerkId,
-      amount: Number(amount), // ensure it's a number
-      method,
-      transactionId,
-      status,
-      isDeleted: false,
-    };
-
-    console.log("📦 Payment data to send:", paymentData);
-
     try {
-      const res = await axios.post(`${API}`, paymentData, {
-        headers: {
-          "x-clerk-user-id": clerkId,
-        },
-      });
+      const token = await getToken(); // No template needed
+      console.log("🔑 Clerk JWT:", token);
+
+      const { amount, method, transactionId, status, _id } = editingPayment;
+
+      const paymentData = {
+        gymId,
+        userId: user.id, // optional, backend can attach from token
+        amount: Number(amount),
+        method,
+        transactionId,
+        status,
+      };
+
+      let res;
+      if (_id) {
+        // Edit existing payment
+        res = await axios.put(`${API}/${_id}`, paymentData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        // Add new payment
+        res = await axios.post(API, paymentData, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
       console.log("✅ Payment saved:", res.data);
       setShowModal(false);
@@ -114,26 +105,21 @@ const Payments = () => {
 
     try {
       const token = await getToken();
+      console.log("🔑 Clerk JWT (handleDelete):", token);
 
       await axios.delete(`${API}/${id}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-clerk-user-id": user.id,
-        },
-        data: { isDeleted: true }, // ✅ properly passing body
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       fetchPayments();
     } catch (err) {
       alert("Failed to delete payment.");
-      console.error("❌ Delete error:", err.response?.data || err.message);
+      console.error("❌ Delete error:", err?.response?.data || err);
     }
   };
 
   useEffect(() => {
-    if (isLoaded && user) {
-      fetchPayments();
-    }
+    if (isLoaded && user) fetchPayments();
   }, [isLoaded, user]);
 
   return (
@@ -244,9 +230,9 @@ const Payments = () => {
                   }
                 >
                   <option value="">Select</option>
-                  <option value="paid">Paid</option>
-                  <option value="pending">Pending</option>
-                  <option value="failed">Failed</option>
+                  <option value="Pending">Pending</option>
+                  <option value="Completed">Completed</option>
+                  <option value="Failed">Failed</option>
                 </Form.Control>
               </Form.Group>
             </Form>

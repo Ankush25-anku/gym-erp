@@ -10,42 +10,68 @@ const API = `${process.env.NEXT_PUBLIC_API_URL}/api/income`;
 
 const Income = () => {
   const { user } = useUser();
+  const { getToken } = useAuth();
+
   const [incomeList, setIncomeList] = useState([]);
   const [showModal, setShowModal] = useState(false);
   const [editingIncome, setEditingIncome] = useState(null);
   const [gymId, setGymId] = useState(null);
-  const { getToken } = useAuth();
 
-  // 🟡 Log entire user object for debugging
-  console.log("🧑 Clerk user:", user);
+  // Fetch Gym ID
+  useEffect(() => {
+    const fetchGymId = async () => {
+      try {
+        const token = await getToken();
+        console.log("🔑 Clerk token:", token);
 
-  // const gymId = user?.publicMetadata?.gymId;
-  const clerkId = user?.id;
+        if (!user || !token) return;
 
-  console.log("🏋️ gymId from Clerk metadata:", gymId);
-  console.log("🧾 clerkId:", clerkId);
+        const role =
+          user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
 
+        const url =
+          role === "superadmin"
+            ? `${process.env.NEXT_PUBLIC_API_URL}/api/gyms`
+            : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
+
+        const res = await axios.get(url, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+
+        const gyms = Array.isArray(res.data) ? res.data : res.data.gyms || [];
+        const selectedGym = gyms[0];
+        setGymId(selectedGym?._id);
+
+        console.log("✅ Gym fetched:", selectedGym);
+      } catch (err) {
+        console.error("❌ Failed to fetch gym:", err);
+      }
+    };
+
+    if (user) fetchGymId();
+  }, [user, getToken]);
+
+  // Fetch incomes
   const fetchIncomes = async () => {
-    if (!clerkId || !gymId) return;
+    if (!gymId) return;
     try {
+      const token = await getToken();
+      console.log("🔑 Clerk token (fetch):", token);
+
       const res = await axios.get(API, {
         params: { gymId },
-        headers: {
-          "x-clerk-user-id": clerkId,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-      const filtered = res.data.filter((entry) => !entry.isDeleted);
-      setIncomeList(filtered);
+
+      setIncomeList(res.data.filter((entry) => !entry.isDeleted));
     } catch (err) {
-      console.error("Failed to fetch incomes", err);
+      console.error("❌ Failed to fetch incomes:", err);
     }
   };
 
   useEffect(() => {
-    if (clerkId && gymId) {
-      fetchIncomes();
-    }
-  }, [clerkId, gymId]);
+    if (gymId) fetchIncomes();
+  }, [gymId]);
 
   const openAddModal = () => {
     setEditingIncome({
@@ -64,78 +90,17 @@ const Income = () => {
     setShowModal(true);
   };
 
-  useEffect(() => {
-    const fetchGymId = async () => {
-      try {
-        const token = await getToken();
-        if (!user || !token) return;
-
-        const role =
-          user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
-
-        const url =
-          role === "superadmin"
-            ? `${process.env.NEXT_PUBLIC_API_URL}/api/gyms`
-            : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
-
-        const res = await axios.get(url, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        });
-
-        const gyms = Array.isArray(res.data) ? res.data : res.data.gyms || [];
-        const selectedGym = gyms[0];
-        setGymId(selectedGym?._id);
-
-        console.log("✅ Gym fetched:", selectedGym);
-      } catch (err) {
-        console.error("❌ Failed to fetch gym:", err);
-      }
-    };
-
-    if (user) fetchGymId();
-  }, [user]);
   const handleSave = async () => {
     try {
       const token = await getToken();
-      const clerkId = user?.id;
+      console.log("🔑 Clerk token (save):", token);
+      if (!token) return;
 
-      if (!clerkId || !token) {
-        console.error("❌ Missing clerkId or token");
-        return;
-      }
-
-      // Get gymId again to be safe
-      const role =
-        user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
-      const gymUrl =
-        role === "superadmin"
-          ? `${process.env.NEXT_PUBLIC_API_URL}/api/gyms`
-          : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
-
-      const gymRes = await axios.get(gymUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
-      });
-
-      const gymList = Array.isArray(gymRes.data)
-        ? gymRes.data
-        : gymRes.data.gyms || [];
-      const gymId = gymList?.[0]?._id;
-
-      if (!gymId) {
-        console.error("❌ No gym found for this user.");
-        return;
-      }
-
-      // Validate fields
       if (
-        !editingIncome.source?.trim() ||
-        !editingIncome.amount ||
-        !editingIncome.date ||
-        !editingIncome.paymentMethod
+        !editingIncome?.source?.trim() ||
+        !editingIncome?.amount ||
+        !editingIncome?.date ||
+        !editingIncome?.paymentMethod?.trim()
       ) {
         alert("Please fill all required fields.");
         return;
@@ -143,25 +108,29 @@ const Income = () => {
 
       const payload = {
         gymId,
+        clerkId: user.id,
         source: editingIncome.source.trim(),
         amount: Number(editingIncome.amount),
         date: new Date(editingIncome.date),
         paymentMethod: editingIncome.paymentMethod.trim(),
         referenceId: editingIncome.referenceId?.trim() || "",
         description: editingIncome.description?.trim() || "",
-        clerkId, // Also saving Clerk ID now
       };
 
       console.log("📦 Payload to send:", payload);
 
-      const res = await axios.post(API, payload, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-          "x-clerk-user-id": clerkId,
-        },
-      });
+      if (editingIncome._id) {
+        // Edit existing
+        await axios.put(`${API}/${editingIncome._id}`, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      } else {
+        // Add new
+        await axios.post(API, payload, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+      }
 
-      console.log("✅ Income saved:", res.data);
       setShowModal(false);
       fetchIncomes();
     } catch (err) {
@@ -169,7 +138,7 @@ const Income = () => {
         "❌ Error saving income:",
         err?.response?.data || err.message
       );
-      alert("Failed to save income. Check required fields.");
+      alert("Failed to save income. Check console for details.");
     }
   };
 
@@ -177,14 +146,16 @@ const Income = () => {
     if (!confirm("Are you sure you want to delete this income entry?")) return;
 
     try {
+      const token = await getToken();
+      console.log("🔑 Clerk token (delete):", token);
+
       await axios.delete(`${API}/${id}`, {
-        headers: {
-          "x-clerk-user-id": clerkId,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
+
       fetchIncomes();
     } catch (err) {
-      console.error("❌ Failed to soft delete:", err);
+      console.error("❌ Failed to delete income:", err);
       alert("Failed to delete income entry.");
     }
   };
@@ -264,7 +235,6 @@ const Income = () => {
                   }
                 />
               </Form.Group>
-
               <Form.Group className="mb-2">
                 <Form.Label>Amount</Form.Label>
                 <Form.Control
@@ -278,7 +248,6 @@ const Income = () => {
                   }
                 />
               </Form.Group>
-
               <Form.Group className="mb-2">
                 <Form.Label>Date</Form.Label>
                 <Form.Control
@@ -296,7 +265,6 @@ const Income = () => {
                   }
                 />
               </Form.Group>
-
               <Form.Group className="mb-2">
                 <Form.Label>Payment Method</Form.Label>
                 <Form.Control
@@ -310,7 +278,6 @@ const Income = () => {
                   }
                 />
               </Form.Group>
-
               <Form.Group className="mb-2">
                 <Form.Label>Reference ID</Form.Label>
                 <Form.Control
@@ -324,7 +291,6 @@ const Income = () => {
                   }
                 />
               </Form.Group>
-
               <Form.Group className="mb-2">
                 <Form.Label>Description</Form.Label>
                 <Form.Control

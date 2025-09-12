@@ -5,28 +5,26 @@ import axios from "axios";
 import { useEffect, useState } from "react";
 import { useAuth } from "@clerk/nextjs";
 
-// ✅ Define API URLs
-const MEMBER_REVENUE_BREAKDOWN_API = `${process.env.NEXT_PUBLIC_API_URL}/api/members/revenue/breakdown`;
+// ✅ API URL for stats
 const DASHBOARD_STATS_API = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/stats`;
-const TOTAL_REVENUE_API = `${process.env.NEXT_PUBLIC_API_URL}/api/admin/total-revenue`;
-const API_URL = `${process.env.NEXT_PUBLIC_API_BASE}/api/admin`;
 
 const UnitCountTwo = () => {
-  const [stats, setStats] = useState(null);
-  const [memberCheckins, setMemberCheckins] = useState(0);
-  const [staffTrainerCheckins, setStaffTrainerCheckins] = useState(0);
-  const [selectedGymId, setSelectedGymId] = useState("default-gym-id"); // ✅ Replace with real gym ID logic
-  const [revenue, setRevenue] = useState({});
-  const [totalRevenue, setTotalRevenue] = useState(0);
-
+  const [stats, setStats] = useState({
+    members: 0,
+    trainers: 0,
+    staff: 0,
+    expenses: 0,
+    memberCheckins: 0,
+    staffTrainerAttendance: 0,
+  });
+  const [selectedGymId, setSelectedGymId] = useState(
+    "68c2561875a4c4ea96662657"
+  ); // your gym ID
   const { getToken } = useAuth();
 
+  // Fetch dashboard stats whenever gymId changes
   useEffect(() => {
-    if (selectedGymId) {
-      fetchDashboardStats();
-      // fetchRevenueBreakdown();
-      // fetchTotalRevenue();
-    }
+    if (selectedGymId) fetchDashboardStats();
   }, [selectedGymId]);
 
   const fetchDashboardStats = async () => {
@@ -44,9 +42,14 @@ const UnitCountTwo = () => {
       const data = res.data;
       console.log("📊 Dashboard stats response:", data);
 
-      setStats(data);
-      setMemberCheckins(data.memberCheckins || 0); // ✅ use correct property
-      setStaffTrainerCheckins(data.staffTrainerAttendance || 0);
+      setStats({
+        members: data.members ?? 0,
+        trainers: data.trainers ?? 0,
+        staff: data.staff ?? 0,
+        expenses: data.expenses ?? 0,
+        memberCheckins: data.memberCheckins ?? 0,
+        staffTrainerAttendance: data.staffTrainerAttendance ?? 0,
+      });
     } catch (err) {
       console.error("❌ Failed to fetch dashboard stats:", {
         message: err?.message,
@@ -55,81 +58,6 @@ const UnitCountTwo = () => {
       });
     }
   };
-
-  const handleMemberAttendance = async (memberId) => {
-    try {
-      const token = await getToken();
-      if (!token) return;
-
-      const headers = { Authorization: `Bearer ${token}` };
-
-      // ✅ Post attendance
-      await axios.post(
-        `${API}/api/attendance/member`,
-        { memberId, gymId },
-        { headers }
-      );
-
-      console.log("✅ Attendance added for member:", memberId);
-
-      // 🔄 Refresh both stats and member list
-      await fetchDashboardStats();
-      await getPeopleList("Member");
-    } catch (error) {
-      console.error(
-        "❌ Failed to add attendance:",
-        error.response?.data || error.message
-      );
-    }
-  };
-
-  // const fetchRevenueBreakdown = async () => {
-  //   try {
-  //     const token = await getToken();
-  //     if (!token) throw new Error("No token available");
-
-  //     const EXPENSES_API = `${process.env.NEXT_PUBLIC_API_URL}/api/expenses`;
-
-  //     const res = await axios.get(EXPENSES_API, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //       params: { gymId: selectedGymId }, // ✅ filter by gym
-  //     });
-
-  //     console.log("✅ Revenue breakdown (from expenses):", res.data);
-  //     setRevenue(res.data);
-  //   } catch (error) {
-  //     console.error(
-  //       "❌ Failed to fetch revenue",
-  //       error.response?.data || error.message
-  //     );
-  //   }
-  // };
-
-  // const fetchTotalRevenue = async () => {
-  //   try {
-  //     const token = await getToken();
-
-  //     console.log("🔍 selectedGymId:", selectedGymId);
-
-  //     const isValidGymId = /^[a-f\d]{24}$/i.test(selectedGymId);
-
-  //     const res = await axios.get(`${API_URL}/api/admin/total-revenue`, {
-  //       headers: {
-  //         Authorization: `Bearer ${token}`,
-  //       },
-  //       params: isValidGymId ? { gymId: selectedGymId } : {},
-  //     });
-
-  //     setTotalRevenue(res.data.totalRevenue);
-  //   } catch (error) {
-  //     console.error(
-  //       "❌ Failed to fetch revenue",
-  //       error.response?.data || error
-  //     );
-  //   }
-  // };
 
   return (
     <div className="container mt-4">
@@ -141,45 +69,37 @@ const UnitCountTwo = () => {
           icon="mdi:account-group"
           color="primary"
           title="Total Members"
-          value={stats?.members ?? 0}
+          value={stats.members}
         />
         <StatCard
           icon="mdi:clock-check-outline"
           color="success"
           title="Total Trainers"
-          value={stats?.trainers ?? 0}
+          value={stats.trainers}
         />
-        {/* <StatCard
-          icon="mdi:currency-usd"
-          color="warning"
-          title="Total Revenue"
-          value={`₹${totalRevenue.toLocaleString("en-IN")}`}
-        /> */}
-
-        
         <StatCard
           icon="mdi:cash-minus"
           color="danger"
           title="Total Expenses"
-          value={`₹${(stats?.expenses ?? 0).toLocaleString("en-IN")}`}
+          value={`₹${stats.expenses.toLocaleString("en-IN")}`}
         />
         <StatCard
           icon="mdi:chart-line"
           color="purple"
           title="Total Staff"
-          value={stats?.staff ?? 0}
+          value={stats.staff}
         />
         <StatCard
           icon="mdi:account-check"
           color="info"
           title="Members Checked-in Today"
-          value={memberCheckins}
+          value={stats.memberCheckins}
         />
         <StatCard
           icon="mdi:account-tie"
           color="dark"
           title="Staff & Trainers Checked-in"
-          value={staffTrainerCheckins}
+          value={stats.staffTrainerAttendance}
         />
       </div>
     </div>

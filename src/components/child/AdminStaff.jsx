@@ -21,9 +21,7 @@ const StaffManagement = () => {
     try {
       const token = await getToken();
       const res = await axios.get(API_URL, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setStaffList(res.data);
     } catch (err) {
@@ -45,9 +43,7 @@ const StaffManagement = () => {
           : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
 
       const res = await axios.get(url, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const gymList = Array.isArray(res.data) ? res.data : res.data.gyms || [];
@@ -72,9 +68,16 @@ const StaffManagement = () => {
       const token = await getToken();
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
+      // ✅ Send exactly what backend expects
       const staffData = {
-        ...editingStaff,
-        ...(editingStaff._id ? {} : { isDeleted: false }), // Set only when creating
+        name: editingStaff.name,
+        email: editingStaff.email,
+        phone: editingStaff.phone,
+        position: editingStaff.position,
+        status:
+          editingStaff.status.charAt(0).toUpperCase() +
+          editingStaff.status.slice(1).toLowerCase(), // "Present" or "Absent"
+        gymId: editingStaff.gymId,
       };
 
       const res = editingStaff._id
@@ -86,9 +89,10 @@ const StaffManagement = () => {
           ? prev.map((s) => (s._id === res.data._id ? res.data : s))
           : [...prev, res.data]
       );
+
       setShowModal(false);
     } catch (err) {
-      console.error("Failed to save staff:", err);
+      console.error("Failed to save staff:", err.response?.data || err);
     }
   };
 
@@ -97,7 +101,7 @@ const StaffManagement = () => {
       const token = await getToken();
       const config = { headers: { Authorization: `Bearer ${token}` } };
 
-      await axios.put(`${API_URL}/${id}`, { isDeleted: true }, config); // Soft delete
+      await axios.delete(`${API_URL}/${id}`, config);
       setStaffList((prev) => prev.filter((s) => s._id !== id));
     } catch (err) {
       console.error("Failed to delete staff:", err);
@@ -106,8 +110,10 @@ const StaffManagement = () => {
 
   const filteredStaff =
     filter === "all"
-      ? staffList.filter((s) => !s.isDeleted) // Exclude deleted
-      : staffList.filter((s) => s.status === filter && !s.isDeleted);
+      ? staffList
+      : staffList.filter(
+          (s) => s.status.toLowerCase() === filter.toLowerCase()
+        );
 
   return (
     <div className="container py-5">
@@ -121,26 +127,22 @@ const StaffManagement = () => {
         <Button
           onClick={() => {
             setEditingStaff({
-              staffName: "",
-              staffEmail: "",
-              staffPhone: "",
-              status: "present",
-              date: new Date().toISOString().split("T")[0],
-              time: new Date().toLocaleTimeString([], {
-                hour: "2-digit",
-                minute: "2-digit",
-              }),
-              remarks: "",
+              name: "",
+              email: "",
+              phone: "",
+              position: "",
+              status: "Present",
               gymId: "",
             });
             fetchGyms();
             setShowModal(true);
           }}
         >
-          + Mark Attendance
+          + Add Staff
         </Button>
       </div>
 
+      {/* Filter */}
       <div className="btn-group mb-4">
         <Button
           variant={filter === "all" ? "dark" : "outline-secondary"}
@@ -162,17 +164,18 @@ const StaffManagement = () => {
         </Button>
       </div>
 
+      {/* Card Grid */}
       <div className="row">
         {filteredStaff.map((staff) => (
           <div className="col-md-4 mb-3" key={staff._id}>
             <div className="card p-3 shadow-sm">
-              <h5>{staff.staffName}</h5>
-              <p className="text-muted small mb-1">{staff.staffEmail}</p>
-              <p className="text-muted small mb-1">{staff.staffPhone}</p>
+              <h5>{staff.name}</h5>
+              <p className="text-muted small mb-1">{staff.email}</p>
+              <p className="text-muted small mb-1">{staff.phone}</p>
+              <p className="text-muted small mb-1">
+                Position: {staff.position}
+              </p>
               <p>Status: {staff.status}</p>
-              <p>Date: {staff.date}</p>
-              <p>Time: {staff.time}</p>
-              <p>Remarks: {staff.remarks}</p>
               <div className="d-flex justify-content-end gap-2">
                 <Button
                   variant="outline-primary"
@@ -194,10 +197,11 @@ const StaffManagement = () => {
         ))}
       </div>
 
+      {/* Modal */}
       <Modal show={showModal} onHide={() => setShowModal(false)}>
         <Modal.Header closeButton>
           <Modal.Title>
-            {editingStaff?._id ? "Edit Attendance" : "Mark Attendance"}
+            {editingStaff?._id ? "Edit Staff" : "Add Staff"}
           </Modal.Title>
         </Modal.Header>
         <Modal.Body>
@@ -226,12 +230,9 @@ const StaffManagement = () => {
               <Form.Label>Name</Form.Label>
               <Form.Control
                 type="text"
-                value={editingStaff?.staffName || ""}
+                value={editingStaff?.name || ""}
                 onChange={(e) =>
-                  setEditingStaff((prev) => ({
-                    ...prev,
-                    staffName: e.target.value,
-                  }))
+                  setEditingStaff((prev) => ({ ...prev, name: e.target.value }))
                 }
               />
             </Form.Group>
@@ -240,11 +241,11 @@ const StaffManagement = () => {
               <Form.Label>Email</Form.Label>
               <Form.Control
                 type="email"
-                value={editingStaff?.staffEmail || ""}
+                value={editingStaff?.email || ""}
                 onChange={(e) =>
                   setEditingStaff((prev) => ({
                     ...prev,
-                    staffEmail: e.target.value,
+                    email: e.target.value,
                   }))
                 }
               />
@@ -254,11 +255,25 @@ const StaffManagement = () => {
               <Form.Label>Phone</Form.Label>
               <Form.Control
                 type="text"
-                value={editingStaff?.staffPhone || ""}
+                value={editingStaff?.phone || ""}
                 onChange={(e) =>
                   setEditingStaff((prev) => ({
                     ...prev,
-                    staffPhone: e.target.value,
+                    phone: e.target.value,
+                  }))
+                }
+              />
+            </Form.Group>
+
+            <Form.Group className="mb-2">
+              <Form.Label>Position</Form.Label>
+              <Form.Control
+                type="text"
+                value={editingStaff?.position || ""}
+                onChange={(e) =>
+                  setEditingStaff((prev) => ({
+                    ...prev,
+                    position: e.target.value,
                   }))
                 }
               />
@@ -267,7 +282,7 @@ const StaffManagement = () => {
             <Form.Group className="mb-2">
               <Form.Label>Status</Form.Label>
               <Form.Select
-                value={editingStaff?.status || "present"}
+                value={editingStaff?.status || "Present"}
                 onChange={(e) =>
                   setEditingStaff((prev) => ({
                     ...prev,
@@ -275,51 +290,9 @@ const StaffManagement = () => {
                   }))
                 }
               >
-                <option value="present">Present</option>
-                <option value="absent">Absent</option>
+                <option value="Present">Present</option>
+                <option value="Absent">Absent</option>
               </Form.Select>
-            </Form.Group>
-
-            <Form.Group className="mb-2">
-              <Form.Label>Date</Form.Label>
-              <Form.Control
-                type="date"
-                value={editingStaff?.date || ""}
-                onChange={(e) =>
-                  setEditingStaff((prev) => ({
-                    ...prev,
-                    date: e.target.value,
-                  }))
-                }
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-2">
-              <Form.Label>Time</Form.Label>
-              <Form.Control
-                type="time"
-                value={editingStaff?.time || ""}
-                onChange={(e) =>
-                  setEditingStaff((prev) => ({
-                    ...prev,
-                    time: e.target.value,
-                  }))
-                }
-              />
-            </Form.Group>
-
-            <Form.Group className="mb-2">
-              <Form.Label>Remarks</Form.Label>
-              <Form.Control
-                type="text"
-                value={editingStaff?.remarks || ""}
-                onChange={(e) =>
-                  setEditingStaff((prev) => ({
-                    ...prev,
-                    remarks: e.target.value,
-                  }))
-                }
-              />
             </Form.Group>
           </Form>
         </Modal.Body>

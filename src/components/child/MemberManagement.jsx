@@ -39,6 +39,18 @@ const MemberManagement = () => {
   const { isLoaded, isSignedIn, getToken } = useAuth();
   const { user } = useUser();
 
+  const getFreshToken = async () => {
+    if (!isLoaded || !isSignedIn) return null;
+    try {
+      const token = await getToken({ template: JWT_TEMPLATE });
+      if (!token) throw new Error("Failed to fetch token");
+      return token;
+    } catch (err) {
+      console.error("❌ Error fetching token:", err);
+      return null;
+    }
+  };
+
   const [authToken, setAuthToken] = useState("");
   const [members, setMembers] = useState([]);
   const [gyms, setGyms] = useState([]);
@@ -112,38 +124,33 @@ const MemberManagement = () => {
   }, [authToken]);
 
   const fetchMembers = async () => {
+    const token = await getFreshToken();
+    if (!token) return;
     try {
       const res = await axios.get(API_URL, {
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
       setMembers(Array.isArray(res.data) ? res.data : res.data.members || []);
     } catch (err) {
       console.error("Failed to fetch members", err?.response?.data || err);
-      if (err?.response?.status === 401) {
-        alert("Unauthorized. Please sign in again.");
-      }
     }
   };
 
   const fetchGyms = async () => {
+    const token = await getFreshToken();
+    if (!token) return;
     try {
       const role =
         user?.publicMetadata?.role || user?.unsafeMetadata?.role || "member";
-
       const url =
         role === "superadmin" ? `${API}/api/gyms` : `${API}/api/gyms/my`;
-
       const res = await axios.get(url, {
-        headers: { Authorization: `Bearer ${authToken}` },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       const data = Array.isArray(res.data) ? res.data : res.data.gyms || [];
       setGyms(data);
     } catch (err) {
       console.error("Failed to fetch gyms:", err?.response?.data || err);
-      if (err?.response?.status === 401) {
-        alert("Unauthorized. Please log in again.");
-      }
     }
   };
 
@@ -197,43 +204,42 @@ const MemberManagement = () => {
   };
 
   const handleAddMember = async () => {
+    const token = await getFreshToken();
+    if (!token) return;
+
+    const initials = newMember.fullname
+      .split(" ")
+      .map((n) => n[0])
+      .join("")
+      .toUpperCase();
+
+    const memberData = {
+      ...newMember,
+      initials,
+      joined: newMember.joined ? newMember.joined.toISOString() : "",
+      expires: newMember.expires ? newMember.expires.toISOString() : "",
+      userEmail:
+        user?.primaryEmailAddress?.emailAddress ||
+        user?.emailAddresses?.[0]?.emailAddress ||
+        "",
+      createdByClerkId: user?.id,
+      isDeleted: false,
+    };
+
     try {
-      const initials = newMember.fullname
-        .split(" ")
-        .map((n) => n[0])
-        .join("")
-        .toUpperCase();
-
-      const memberData = {
-        ...newMember,
-        initials,
-        joined: newMember.joined ? newMember.joined.toISOString() : "",
-        expires: newMember.expires ? newMember.expires.toISOString() : "",
-        userEmail:
-          user?.primaryEmailAddress?.emailAddress ||
-          user?.emailAddresses?.[0]?.emailAddress ||
-          "",
-        createdByClerkId: user?.id,
-        isDeleted: false,
-      };
-
       const response = await axios.post(API_URL, memberData, {
-        headers: {
-          Authorization: `Bearer ${authToken}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
       setMembers((prev) => [...prev, response.data]);
       setShowAddModal(false);
-
       setNewMember({
         fullname: "",
         email: "",
         phone: "",
         plan: "",
         address: "",
-        expires: null,
         joined: null,
+        expires: null,
         status: "active",
         gymId: "",
         emergency: { name: "", phoneno: "", relation: "" },
@@ -245,77 +251,61 @@ const MemberManagement = () => {
         },
         image: "",
       });
-
-      setImageFile(null);
-    } catch (error) {
-      console.error("Error adding member:", error?.response?.data || error);
+    } catch (err) {
+      console.error("Error adding member:", err?.response?.data || err);
     }
   };
   const handleDelete = async (id) => {
+    if (!confirm("Are you sure you want to delete this member?")) return;
+    const token = await getFreshToken();
+    if (!token) return;
+
     try {
-      if (!id) {
-        console.error("No member ID provided.");
-        return;
-      }
-
-      console.log("🟡 Deleting member with ID:", id);
-      console.log("🔐 Auth Token:", authToken);
-
-      const res = await axios.delete(`${API_URL}/${id}`, {
-        data: { isDeleted: true }, // ✅ DELETE with body
-        headers: { Authorization: `Bearer ${authToken}` },
+      await axios.delete(`${API_URL}/${id}`, {
+        data: { isDeleted: true },
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      console.log("✅ Delete response:", res.data);
-
-      // Remove from UI
       setMembers((prev) => prev.filter((m) => m._id !== id));
     } catch (err) {
-      const msg =
-        err?.response?.data?.message ||
-        err?.response?.data ||
-        err?.message ||
-        "Unknown error";
-
-      console.error("❌ Failed to delete member:", msg, err);
-      alert("Failed to delete member: " + msg);
+      console.error("Failed to delete member:", err?.response?.data || err);
+      alert("Failed to delete member.");
     }
   };
 
   const handleEditClick = (member) => {
-    if (!member) return;
-
     setEditingMember({
       ...member,
-      gymId:
-        member.gymId && typeof member.gymId === "object"
-          ? member.gymId._id
-          : member.gymId || "",
+      gymId: member.gymId?._id || member.gymId || "",
     });
-
     setShowEditModal(true);
   };
 
   const handleSaveEdit = async () => {
+    const token = await getFreshToken();
+    if (!token || !editingMember) return;
+
     try {
       const res = await axios.put(
         `${API_URL}/${editingMember._id}`,
         editingMember,
-        {
-          headers: { Authorization: `Bearer ${authToken}` },
-        }
+        { headers: { Authorization: `Bearer ${token}` } }
       );
 
+      // Update the members array
       setMembers((prev) =>
         prev.map((m) => (m._id === res.data._id ? res.data : m))
       );
 
+      // Update selectedMember so Plan tab shows latest info
+      setSelectedMember(res.data);
+
       setShowEditModal(false);
     } catch (err) {
-      console.error("Failed to update", err?.response?.data || err);
+      console.error("Failed to update member:", err?.response?.data || err);
     }
   };
 
+  // Calculate expiry date based on joining date and plan
   const calculateExpiryDate = (joinDate, plan) => {
     if (!joinDate || !plan) return null;
     const expiry = new Date(joinDate);
@@ -329,8 +319,11 @@ const MemberManagement = () => {
     return expiry;
   };
 
-  const calculateRemainingDays = (joinDate, plan) => {
-    const expiryDate = calculateExpiryDate(joinDate, plan);
+  // Calculate remaining days, optionally using a manually set expiry date
+  const calculateRemainingDays = (joinDate, plan, expires = null) => {
+    const expiryDate = expires
+      ? new Date(expires)
+      : calculateExpiryDate(joinDate, plan);
     if (!expiryDate) return "N/A";
     const today = new Date();
     const diffTime = expiryDate.getTime() - today.getTime();
@@ -372,35 +365,23 @@ const MemberManagement = () => {
   }, []);
 
   const handleBuyPlan = async (member) => {
+    const token = await getFreshToken();
+    if (!token) return;
+
+    let amount;
+    if (member.plan === "Basic") amount = 1000 * 100;
+    else if (member.plan === "Premium") amount = 6000 * 100;
+    else if (member.plan === "VIP") amount = 12000 * 100;
+    else return alert("Invalid plan selected for this member.");
+
+    if (!window.Razorpay) return alert("Razorpay not loaded.");
+
     try {
-      // ✅ Dynamically set amount based on member's plan
-      let amount;
-      if (member.plan === "Basic") {
-        amount = 1000 * 100; // ₹1000 in paise
-      } else if (member.plan === "Premium") {
-        amount = 6000 * 100; // ₹6000 in paise
-      } else if (member.plan === "VIP") {
-        amount = 12000 * 100; // ₹12000 in paise
-      } else {
-        alert("Invalid plan selected for this member.");
-        return;
-      }
-
-      // ✅ Step 0: Check Razorpay is available
-      if (!window.Razorpay) {
-        alert(
-          "Razorpay is not available. Please reload the page or try a different browser."
-        );
-        return;
-      }
-
-      // ✅ Step 1: Create Razorpay order from backend
       const { data: order } = await axios.post(
         `${API}/api/razorpay/create-order`,
         { amount }
       );
 
-      // ✅ Step 2: Launch Razorpay checkout
       const options = {
         key: process.env.NEXT_PUBLIC_RAZORPAY_KEY_ID,
         amount: order.amount,
@@ -409,65 +390,89 @@ const MemberManagement = () => {
         order_id: order.id,
         handler: async function (response) {
           try {
-            const token = await getToken();
+            // Verify payment on backend
+            const verifyRes = await axios.post(`${API}/api/razorpay/verify`, {
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_signature: response.razorpay_signature,
+            });
 
-            if (!user?.id) {
-              console.error("❌ Clerk user ID not found.");
-              return alert("User ID missing. Please sign in again.");
+            if (!verifyRes.data.success) {
+              return alert(
+                "Payment verification failed. Please contact support."
+              );
             }
 
-            console.log("Saving payment with clerkUserId:", user.id); // ✅ Debug log
+            console.log("Member ID being sent:", member._id);
 
+            // ✅ Refresh token AFTER Razorpay checkout
+            const freshToken = await getFreshToken();
+            if (!freshToken) {
+              return alert("Session expired. Please log in again.");
+            }
+
+            // Save payment if verified
             const paymentData = {
               paymentId: response.razorpay_payment_id,
               orderId: response.razorpay_order_id,
               memberId: member._id,
               memberName: member.fullname,
-              amount: order.amount / 100, // Convert paise to ₹
-              date: new Date().toISOString(),
+              amount: order.amount / 100,
+              date: new Date(),
               method: "Razorpay",
-              // ❌ Do NOT pass clerkUserId — backend extracts it from token
             };
 
             await axios.post(`${API}/api/member-payments`, paymentData, {
-              headers: {
-                Authorization: `Bearer ${token}`,
-              },
+              headers: { Authorization: `Bearer ${freshToken}` },
             });
 
-            // ✅ Step 4: Update UI with paid amount
             setPaidMembers((prev) => ({
               ...prev,
               [member._id]: paymentData.amount,
             }));
 
-            alert(
-              `✅ Payment of ₹${paymentData.amount} recorded successfully!`
-            );
+            alert(`Payment of ₹${paymentData.amount} recorded successfully!`);
           } catch (dbError) {
-            console.error("❌ Error saving payment to DB:", dbError);
+            console.error("Error saving payment:", dbError);
             alert(
-              "✅ Payment succeeded but saving to database failed. Please contact support."
+              "Payment succeeded but verification/db save failed. Please contact support."
             );
           }
         },
+
         prefill: {
           name: member.fullname,
           email: member.email,
           contact: member.phone,
         },
-        theme: {
-          color: "#3399cc",
-        },
+        theme: { color: "#3399cc" },
       };
 
       const rzp = new window.Razorpay(options);
       rzp.open();
-    } catch (error) {
-      console.error("Payment Error:", error);
+    } catch (err) {
+      console.error("Payment Error:", err);
       alert("Payment failed. Please try again.");
     }
   };
+
+  // -----------------------------
+  // Init
+  // -----------------------------
+  useEffect(() => {
+    const script = document.createElement("script");
+    script.src = "https://checkout.razorpay.com/v1/checkout.js";
+    script.async = true;
+    document.body.appendChild(script);
+  }, []);
+
+  useEffect(() => {
+    if (isLoaded && isSignedIn) {
+      fetchMembers();
+      fetchGyms();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isLoaded, isSignedIn]);
   return (
     <div className="container py-4">
       <div className="d-flex flex-wrap justify-content-between align-items-center mb-3 gap-2">
@@ -1110,10 +1115,10 @@ const MemberManagement = () => {
                       </p>
                     </>
                   )}
-                  {activeTab === "plan" && (
+                  {activeTab === "plan" && selectedMember && (
                     <>
                       <p className="mb-1">
-                        <strong>Plan:</strong> {selectedMember.plan}
+                        <strong>Plan:</strong> {selectedMember.plan || "N/A"}
                       </p>
                       <p className="mb-1">
                         <strong>Plan Price:</strong>{" "}
@@ -1134,9 +1139,14 @@ const MemberManagement = () => {
                             )
                           : "N/A"}
                       </p>
+
                       <p className="mb-1">
                         <strong>Expires:</strong>{" "}
-                        {selectedMember.joined && selectedMember.plan
+                        {selectedMember.expires
+                          ? new Date(selectedMember.expires).toLocaleDateString(
+                              "en-GB"
+                            )
+                          : selectedMember.joined && selectedMember.plan
                           ? new Date(
                               calculateExpiryDate(
                                 selectedMember.joined,
@@ -1145,11 +1155,13 @@ const MemberManagement = () => {
                             ).toLocaleDateString("en-GB")
                           : "N/A"}
                       </p>
+
                       <p className="mb-1 text-success fw-semibold">
                         <strong>Remaining:</strong>{" "}
                         {calculateRemainingDays(
                           selectedMember.joined,
-                          selectedMember.plan
+                          selectedMember.plan,
+                          selectedMember.expires
                         )}
                       </p>
                     </>
@@ -1161,14 +1173,12 @@ const MemberManagement = () => {
                         <strong>Payment Status:</strong>{" "}
                         <span
                           className={`badge ${
-                            selectedMember.plan &&
-                            new Date(selectedMember.expires) >= new Date()
+                            paidMembers[selectedMember._id]
                               ? "bg-success"
                               : "bg-warning"
                           }`}
                         >
-                          {selectedMember.plan &&
-                          new Date(selectedMember.expires) >= new Date()
+                          {paidMembers[selectedMember._id]
                             ? "Payment Done"
                             : "Payment Pending"}
                         </span>
@@ -1178,10 +1188,14 @@ const MemberManagement = () => {
                         <strong>Subscription Status:</strong>{" "}
                         <span
                           className={`badge ${
-                            selectedMember.plan ? "bg-success" : "bg-danger"
+                            paidMembers[selectedMember._id]
+                              ? "bg-success"
+                              : "bg-danger"
                           }`}
                         >
-                          {selectedMember.plan ? "Active" : "Expired"}
+                          {paidMembers[selectedMember._id]
+                            ? "Active"
+                            : "Expired"}
                         </span>
                       </p>
                     </>

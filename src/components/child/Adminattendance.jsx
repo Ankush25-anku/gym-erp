@@ -103,32 +103,33 @@ const MemberAttendance = () => {
     e.preventDefault();
     const token = await getToken();
 
+    const category = formData.category || "";
+    const status = formData.status || "";
+    const userId = formData.personId || ""; // ✅ map personId to userId
+    const ownerClerkId = formData.ownerClerkId || "";
+
     const date = selectedDate.toISOString().split("T")[0];
-    const { category, status, ownerClerkId, personId } = formData;
 
-    console.log("📝 handleSubmit called with:");
-    console.log("➡️ category:", category);
-    console.log("➡️ ownerClerkId:", ownerClerkId);
-    console.log("➡️ personId:", personId);
-    console.log("➡️ status:", status);
-    console.log("➡️ date:", date);
-    console.log("➡️ gymId:", gymId);
-
-    if (!ownerClerkId || !category || !status || !date || !gymId || !personId) {
-      console.error("❌ Missing required fields:", formData);
+    if (!userId || !category || !status || !date || !gymId) {
+      console.error("❌ Missing required fields:", {
+        userId,
+        category,
+        status,
+        date,
+        gymId,
+      });
       return;
     }
 
     const payload = {
+      userId, // ✅ backend expects userId
       category,
       status,
       date,
       gymId,
       ownerClerkId,
-      personId,
     };
 
-    console.log("📤 Submitting formData:", formData);
     console.log("📦 Final payload to submit:", payload);
 
     try {
@@ -144,15 +145,13 @@ const MemberAttendance = () => {
         console.log("✅ Attendance created successfully.");
       }
 
-      await fetchAttendance(); // fetch latest entries
-      await getPeopleList(); // 🟢 refresh person list used for name resolving
-
+      await fetchAttendance(); // refresh attendance
       setShowModal(false);
       setFormData({
         category: "Member",
         status: "Check-in",
-        ownerClerkId: "",
         personId: "",
+        ownerClerkId: "",
       });
       setEditingId(null);
     } catch (err) {
@@ -276,32 +275,26 @@ const MemberAttendance = () => {
     }
   }, [gymId]);
   const getUserName = (entry) => {
-    console.log("🔍 Resolving name for attendance entry:");
-    console.log("📌 category:", entry.category);
-    console.log("📌 ownerClerkId:", entry.ownerClerkId);
-    console.log("📌 personId:", entry.personId);
+    const people =
+      entry.category === "Trainer"
+        ? trainers
+        : entry.category === "Staff"
+        ? staff
+        : members;
 
-    const normalizedPersonId = entry.personId?.toString();
-    console.log("📌 normalizedPersonId:", normalizedPersonId);
+    if (!people || people.length === 0) return "Loading...";
 
-    let people = [];
+    const normalizedUserId = entry.userId?.toString(); // ✅ use userId
+    const match = people.find((p) => p._id.toString() === normalizedUserId);
 
-    if (entry.category === "Trainer") {
-      people = trainers;
-    } else if (entry.category === "Staff") {
-      people = staff;
-    } else if (entry.category === "Member") {
-      people = members;
+    if (!match) {
+      console.warn("⚠️ Person not found for entry:", entry);
+      return "Unknown";
     }
 
-    console.log("🗃️ Available people:", people);
-
-    const match = people.find((p) => p._id === normalizedPersonId);
-
-    console.log("✅ Matched person:", match);
-
-    // 👇 Added `staffName` check
-    return match?.fullname || match?.name || match?.staffName || "Unknown";
+    // Return name based on schema
+    if (entry.category === "Member") return match.fullname || "Unknown";
+    return match.name || "Unknown"; // Trainers and Staff use 'name'
   };
 
   console.log("🧾 Selected ownerClerkId:", formData.ownerClerkId);
@@ -347,38 +340,47 @@ const MemberAttendance = () => {
           ) : (
             attendance.map((entry, index) => (
               <tr key={entry._id}>
-                <td>{index + 1}</td> {/* ✅ Show row number properly */}
+                <td>{index + 1}</td>
                 <td>
-                  {entry.personId ? (
+                  {entry.userId ? (
                     getUserName(entry)
                   ) : (
                     <span className="text-muted">N/A</span>
                   )}
                 </td>
+
                 <td>{entry.category}</td>
                 <td>
                   <Badge
-                    bg={entry.status === "Check-in" ? "success" : "danger"}
+                    bg={
+                      entry.status === "Check-in"
+                        ? "success"
+                        : entry.status === "Check-out"
+                        ? "warning"
+                        : "secondary"
+                    }
                   >
                     {entry.status}
                   </Badge>
                 </td>
                 <td>{new Date(entry.time).toLocaleTimeString()}</td>
                 <td>
-                  <Button
-                    variant="warning"
-                    size="sm"
-                    onClick={() => handleEdit(entry)}
-                  >
-                    Edit
-                  </Button>{" "}
-                  <Button
-                    variant="danger"
-                    size="sm"
-                    onClick={() => handleDelete(entry._id)}
-                  >
-                    Delete
-                  </Button>
+                  <div className="d-flex gap-2">
+                    <Button
+                      variant="warning"
+                      size="sm"
+                      onClick={() => handleEdit(entry)}
+                    >
+                      Edit
+                    </Button>
+                    <Button
+                      variant="danger"
+                      size="sm"
+                      onClick={() => handleDelete(entry._id)}
+                    >
+                      Delete
+                    </Button>
+                  </div>
                 </td>
               </tr>
             ))
@@ -406,7 +408,8 @@ const MemberAttendance = () => {
                       setFormData({
                         ...formData,
                         category: selectedCategory,
-                        clerkUserId: "",
+                        personId: "",
+                        ownerClerkId: "",
                       });
                     }}
                   >
@@ -423,49 +426,24 @@ const MemberAttendance = () => {
                     value={formData.personId}
                     onChange={(e) => {
                       const selectedId = e.target.value;
+                      if (!selectedId) return;
+
                       const person = peopleList.find(
                         (p) => p._id === selectedId
                       );
-                      const clerkId = person?.ownerClerkId || "";
-
-                      // ✅ Include staffName
-                      const personName =
-                        person?.fullname ||
-                        person?.name ||
-                        person?.staffName ||
-                        "Unnamed";
-
-                      console.log("🟢 Person selected from dropdown:");
-                      console.log("➡️ personId (selectedId):", selectedId);
-                      console.log("➡️ ownerClerkId:", clerkId);
-                      console.log("➡️ name:", personName);
-                      console.log("➡️ Current category:", formData.category);
+                      if (!person) return;
 
                       setFormData((prev) => ({
                         ...prev,
-                        ownerClerkId: clerkId,
                         personId: selectedId,
+                        ownerClerkId: person.ownerClerkId || "",
                       }));
                     }}
                   >
                     <option value="">-- Select --</option>
                     {peopleList.map((person, i) => {
                       const value = person._id;
-
-                      // ✅ Include staffName for label
-                      const label =
-                        person.fullname ||
-                        person.name ||
-                        person.staffName ||
-                        "Unnamed";
-
-                      console.log("📋 Rendering <option>:", {
-                        category,
-                        display: label,
-                        value,
-                        ownerClerkId: person.ownerClerkId,
-                      });
-
+                      const label = person.fullname || person.name || "Unnamed";
                       return (
                         <option key={`${value}_${i}`} value={value}>
                           {label}
@@ -476,6 +454,7 @@ const MemberAttendance = () => {
                 </Form.Group>
               </Col>
             </Row>
+
             <Form.Group className="mb-3">
               <Form.Label>Status</Form.Label>
               <Form.Select
@@ -488,6 +467,7 @@ const MemberAttendance = () => {
                 <option value="Check-out">Check-out</option>
               </Form.Select>
             </Form.Group>
+
             <div className="d-grid">
               <Button type="submit">{editingId ? "Update" : "Submit"}</Button>
             </div>

@@ -19,11 +19,7 @@ const Inventory = () => {
   const fetchInventory = async () => {
     try {
       const token = await getToken();
-
-      if (!isLoaded || !user || !token) {
-        console.error("❌ User or token not loaded.");
-        return;
-      }
+      if (!isLoaded || !user || !token) return;
 
       const role =
         user.publicMetadata?.role || user.unsafeMetadata?.role || "member";
@@ -34,9 +30,7 @@ const Inventory = () => {
           : `${process.env.NEXT_PUBLIC_API_URL}/api/gyms/my`;
 
       const gymRes = await axios.get(gymUrl, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+        headers: { Authorization: `Bearer ${token}` },
       });
 
       const gyms = Array.isArray(gymRes.data)
@@ -45,11 +39,7 @@ const Inventory = () => {
 
       const selectedGym = gyms[0];
       const foundGymId = selectedGym?._id;
-
-      if (!foundGymId) {
-        console.error("❌ No gym ID found.");
-        return;
-      }
+      if (!foundGymId) return;
 
       setGymId(foundGymId);
 
@@ -64,7 +54,6 @@ const Inventory = () => {
       );
 
       setInventoryItems(res.data);
-      console.log("✅ Inventory fetched:", res.data);
     } catch (err) {
       console.error(
         "❌ Failed to fetch inventory:",
@@ -74,12 +63,7 @@ const Inventory = () => {
   };
 
   const openAddModal = () => {
-    setEditingItem({
-      itemName: "",
-      quantity: "",
-      status: "",
-      notes: "",
-    });
+    setEditingItem({ itemName: "", quantity: 0, status: "", notes: "" });
     setShowModal(true);
   };
 
@@ -91,31 +75,15 @@ const Inventory = () => {
   const handleSave = async () => {
     try {
       const token = await getToken();
-
-      if (!isLoaded || !user || !token) {
-        console.error("❌ User or token not loaded.");
-        return;
-      }
+      if (!isLoaded || !user || !token) return;
 
       const { itemName, quantity, status, notes, _id } = editingItem;
-
-      if (!gymId || !itemName || quantity === undefined || !status) {
-        alert("Please fill all required fields.");
+      if (!gymId || !itemName.trim() || quantity < 0 || !status) {
+        alert("Please fill all required fields correctly.");
         return;
       }
 
-      const payload = {
-        itemName,
-        quantity,
-        status,
-        notes,
-        gymId,
-        isDeleted: false,
-      };
-
-      console.log("📦 Saving item:", payload);
-      console.log("🧾 Clerk ID:", user.id);
-
+      const payload = { itemName, quantity, status, notes, gymId };
       const headers = {
         Authorization: `Bearer ${token}`,
         "x-clerk-user-id": user.id,
@@ -124,10 +92,8 @@ const Inventory = () => {
       let res;
       if (_id) {
         res = await axios.put(`${API}/${_id}`, payload, { headers });
-        console.log("✅ Item updated:", res.data);
       } else {
         res = await axios.post(API, payload, { headers });
-        console.log("✅ Item created:", res.data);
       }
 
       setShowModal(false);
@@ -136,52 +102,23 @@ const Inventory = () => {
       console.error("❌ Save failed:", err.response?.data || err.message);
     }
   };
-  const handleDelete = async (id) => {
-    const confirmed = window.confirm(
-      "Are you sure you want to delete this item?"
-    );
-    if (!confirmed) return;
 
-    console.log("🟡 Delete initiated for ID:", id);
+  const handleDelete = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this item?")) return;
 
     try {
       const token = await getToken();
-      console.log("🟢 Token fetched:", token);
+      if (!isLoaded || !user || !token) return;
 
-      if (!isLoaded) {
-        console.error("❌ Clerk is not loaded.");
-        return;
-      }
-      if (!user) {
-        console.error("❌ User not found.");
-        return;
-      }
-      if (!token) {
-        console.error("❌ Token not available.");
-        return;
-      }
-
-      const payload = { isDeleted: true };
       const headers = {
         Authorization: `Bearer ${token}`,
         "x-clerk-user-id": user.id,
       };
+      await axios.put(`${API}/${id}`, { isDeleted: true }, { headers });
 
-      console.log("📦 Sending PUT request to:", `${API}/${id}`);
-      console.log("📝 Payload:", payload);
-      console.log("📨 Headers:", headers);
-
-      const response = await axios.put(`${API}/${id}`, payload, { headers });
-
-      console.log("✅ Soft delete response:", response.data);
-      fetchInventory(); // Refresh list
+      fetchInventory();
     } catch (err) {
-      console.error("❌ Delete error:", {
-        errorData: err?.response?.data,
-        status: err?.response?.status,
-        message: err?.message,
-        fullError: err,
-      });
+      console.error("❌ Delete error:", err.response?.data || err.message);
       alert("Failed to delete item.");
     }
   };
@@ -264,11 +201,11 @@ const Inventory = () => {
                 <Form.Label>Quantity</Form.Label>
                 <Form.Control
                   type="number"
-                  value={editingItem?.quantity || ""}
+                  value={editingItem?.quantity ?? 0}
                   onChange={(e) =>
                     setEditingItem((prev) => ({
                       ...prev,
-                      quantity: e.target.value,
+                      quantity: parseInt(e.target.value, 10) || 0,
                     }))
                   }
                 />
@@ -276,8 +213,7 @@ const Inventory = () => {
 
               <Form.Group className="mb-2">
                 <Form.Label>Status</Form.Label>
-                <Form.Control
-                  type="text"
+                <Form.Select
                   value={editingItem?.status || ""}
                   onChange={(e) =>
                     setEditingItem((prev) => ({
@@ -285,7 +221,13 @@ const Inventory = () => {
                       status: e.target.value,
                     }))
                   }
-                />
+                  required
+                >
+                  <option value="">Select Status</option>
+                  <option value="Available">Available</option>
+                  <option value="Out of Stock">Out of Stock</option>
+                  <option value="In Use">In Use</option>
+                </Form.Select>
               </Form.Group>
 
               <Form.Group className="mb-2">

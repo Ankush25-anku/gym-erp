@@ -138,7 +138,19 @@ const TrainerManagement = () => {
       alert("Failed to save trainer. Please check your input and login.");
     }
   };
-  const handleDelete = async (id) => {
+  const handleDelete = async (trainer) => {
+    console.log("handleDelete called with:", trainer);
+
+    if (!trainer) {
+      console.error("No trainer passed to handleDelete");
+      return;
+    }
+
+    if (!trainer.userEmail) {
+      console.error("Trainer object missing userEmail:", trainer);
+      return;
+    }
+
     try {
       const token = await getToken();
       if (!token) {
@@ -146,21 +158,19 @@ const TrainerManagement = () => {
         return;
       }
 
-      // Soft-delete the trainer by setting isDeleted to true
-      await axios.put(
-        `${API_URL}/${id}`,
-        { isDeleted: true },
-        {
-          headers: {
-            Authorization: `Bearer ${token}`,
-          },
-        }
+      console.log(
+        `Deleting trainer with ID: ${trainer._id} for user: ${trainer.userEmail}`
       );
 
-      // Remove from UI
-      setTrainers((prev) => prev.filter((t) => t._id !== id));
+      await axios.delete(`${API_URL}/${trainer._id}`, {
+        data: { userEmail: trainer.userEmail },
+        headers: { Authorization: `Bearer ${token}` },
+      });
+
+      setTrainers((prev) => prev.filter((t) => t._id !== trainer._id));
+      console.log("Trainer deleted successfully!");
     } catch (err) {
-      console.error("Failed to delete trainer:", err);
+      console.error("Failed to delete trainer:", err?.response?.data || err);
     }
   };
 
@@ -289,7 +299,7 @@ const TrainerManagement = () => {
                 <Button
                   variant="outline-danger"
                   size="sm"
-                  onClick={() => handleDelete(trainer._id || trainer.id)}
+                  onClick={() => handleDelete(trainer)} // pass full object
                 >
                   🗑
                 </Button>
