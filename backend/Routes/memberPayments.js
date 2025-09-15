@@ -1,7 +1,7 @@
 // routes/memberPayments.js
 const express = require("express");
 const router = express.Router();
-const Payment = require("../models/memberPayment");
+const Payment = require("../models/MemberPayment");
 const verifyClerkToken = require("../middleware/verifyClerkToken");
 
 // -----------------------------
